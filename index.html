@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIM 卡自助充值 Portal - AG Digital Services</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+  .tab-active { border-bottom: 3px solid #2A4699; color: #2A4699; font-weight: 700; }
+  .tab-inactive { border-bottom: 3px solid transparent; color: #94a3b8; }
+</style>
+</head>
+<body class="bg-slate-100 min-h-screen flex items-start justify-center p-4">
+
+<!-- ========================================================
+  【配置区】部署好 Google Apps Script 后,把下面这行网址替换掉
+========================================================= -->
+<script>
+  const CONFIG = {
+    GAS_API_URL: "https://script.google.com/macros/s/AKfycbwYWiUaYMozQyrjYsj1xJA2nR1KgzU86aM6eb2JQM8xm0z3zD5RRmyTkMqx4Hgr17wW6w/exec",
+    CURRENCY_SYMBOL: "$"
+  };
+</script>
+
+<!-- ================= 1. 登录窗口 ================= -->
+<div id="loginModal" class="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden mt-10">
+  <div class="p-6 text-white text-center" style="background:#2A4699;">
+    <h2 class="text-xl font-bold">客户登录</h2>
+    <p class="text-blue-100 text-xs mt-1">请输入您的邮箱与密码</p>
+  </div>
+  <form id="loginForm" onsubmit="handleLogin(event)" class="p-6 space-y-4">
+    <div>
+      <label class="block text-xs font-bold text-slate-600 uppercase mb-1">邮箱</label>
+      <input type="email" id="loginEmail" required placeholder="you@example.com"
+        class="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm" />
+    </div>
+    <div>
+      <label class="block text-xs font-bold text-slate-600 uppercase mb-1">密码</label>
+      <div class="relative">
+        <input type="password" id="loginPassword" required placeholder="请输入密码"
+          class="w-full px-4 py-2.5 pr-11 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm" />
+        <button type="button" onclick="togglePasswordVisibility()" id="togglePwBtn"
+          class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 select-none">
+          <svg id="eyeIconOpen" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+          <svg id="eyeIconClosed" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden">
+            <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a18.6 18.6 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+            <line x1="1" y1="1" x2="23" y2="23"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div id="loginError" class="hidden text-xs text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200"></div>
+    <button type="submit" id="loginBtn"
+      class="w-full text-white py-3 rounded-xl font-bold text-sm shadow-md transition-all flex justify-center items-center"
+      style="background:#2A4699;">
+      <span>登 录</span>
+    </button>
+  </form>
+</div>
+
+<!-- ================= 2. 主界面 ================= -->
+<div id="mainPortal" class="hidden w-full max-w-lg bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden mt-10">
+
+  <!-- 顶部状态看板 -->
+  <div class="p-6 text-white" style="background:#2A4699;">
+    <div class="flex justify-between items-start">
+      <div>
+        <span class="text-[10px] px-2 py-0.5 rounded font-semibold tracking-wide" style="background:#185FA5;">自助充值</span>
+        <h1 class="text-xl font-bold mt-1" id="dispCustName">--</h1>
+        <p class="text-blue-200 text-xs mt-0.5">邮箱: <span class="mono" id="dispEmail">--</span></p>
+      </div>
+      <div class="text-right">
+        <span class="text-xs text-blue-200 block">当前账户余额</span>
+        <span class="text-2xl font-black mono" style="color:#F5820B;" id="dispBalance">$0.00</span>
+      </div>
+    </div>
+    <button onclick="handleLogout()" class="text-[11px] text-blue-200 underline mt-3">退出登录</button>
+  </div>
+
+  <!-- Tab 切换 -->
+  <div class="flex border-b border-slate-200 text-sm">
+    <button onclick="switchTab('order')" id="tabBtnOrder" class="flex-1 py-3 tab-active">下单充值</button>
+    <button onclick="switchTab('history')" id="tabBtnHistory" class="flex-1 py-3 tab-inactive">历史记录 (近3个月)</button>
+  </div>
+
+  <!-- ============ Tab 1: 下单 ============ -->
+  <div id="tabOrder" class="p-6 space-y-5">
+
+    <!-- SN 输入 + 拍照识别 -->
+    <div>
+      <div class="flex justify-between items-center mb-1">
+        <label class="block text-sm font-bold text-slate-700">SIM 卡 SN 码 <span class="text-red-500">*</span></label>
+        <span class="text-xs font-mono text-slate-400"><span id="snCount">0</span> / 20 位数字</span>
+      </div>
+      <div class="relative">
+        <input type="text" id="simSnInput" maxlength="20" inputmode="numeric"
+          placeholder="请输入 20 位纯阿拉伯数字,或拍照自动识别"
+          oninput="handleSnInput(this)"
+          class="w-full px-4 py-3 border border-slate-200 rounded-xl mono text-sm focus:outline-none transition-all" />
+        <span id="snStatusIcon" class="absolute right-3 top-3 text-base"></span>
+      </div>
+      <p id="snFeedback" class="text-xs mt-1.5 font-medium"></p>
+
+      <!-- 拍照/上传识别 -->
+      <div class="mt-2 flex items-center gap-2">
+        <label class="cursor-pointer text-xs font-semibold px-3 py-2 rounded-lg border border-dashed border-slate-300 text-slate-600 hover:bg-slate-50 flex items-center gap-1.5">
+          📷 拍照/上传SIM卡照片自动识别SN
+          <input type="file" accept="image/*" capture="environment" class="hidden" onchange="handleOcrScan(event)" />
+        </label>
+        <span id="ocrStatus" class="text-xs text-slate-400"></span>
+      </div>
+    </div>
+
+    <!-- 套餐搜索 + 下拉 -->
+    <div>
+      <div class="flex justify-between items-center mb-1">
+        <label class="block text-sm font-bold text-slate-700">选择充值套餐 <span class="text-red-500">*</span></label>
+        <span class="text-xs" style="color:#2A4699;">支持关键词搜索</span>
+      </div>
+      <input type="text" id="packageSearchInput" placeholder="🔍 快速搜索套餐..."
+        oninput="renderPackagesDropdown(this.value)"
+        class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none focus:bg-white mb-2" />
+      <select id="packageSelect" onchange="updatePriceCalculation()"
+        class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none cursor-pointer">
+      </select>
+      <p id="searchCountFeedback" class="text-[11px] text-slate-400 mt-1"></p>
+    </div>
+
+    <!-- 金额预估 -->
+    <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-sm">
+      <div class="flex justify-between text-slate-600">
+        <span>本次套餐金额:</span>
+        <span class="font-bold text-slate-900 mono" id="calcPrice">$0.00</span>
+      </div>
+      <div class="flex justify-between text-slate-600">
+        <span>下单后预计余额:</span>
+        <span class="font-bold mono" id="calcProjectedBalance" style="color:#185FA5;">$0.00</span>
+      </div>
+    </div>
+
+    <button onclick="handleSubmitOrder()" id="submitBtn"
+      class="w-full text-white py-3.5 rounded-xl font-bold text-base shadow-md transition-all flex justify-center items-center"
+      style="background:#F5820B;">
+      <span>确认提交下单</span>
+    </button>
+
+    <p class="text-center text-[11px] text-slate-400 leading-tight">
+      * 订单提交后将即时进入后台并自动扣减余额。由于运营商充值由管理员于每日凌晨统一处理，请您耐心等待。
+    </p>
+  </div>
+
+  <!-- ============ Tab 2: 历史记录 ============ -->
+  <div id="tabHistory" class="hidden p-6 space-y-4">
+    <div>
+      <h3 class="text-sm font-bold text-slate-700 mb-2">📦 订单记录</h3>
+      <div id="orderHistoryList" class="space-y-2 text-xs"></div>
+    </div>
+    <div>
+      <h3 class="text-sm font-bold text-slate-700 mb-2 mt-4">💰 充值记录</h3>
+      <div id="rechargeHistoryList" class="space-y-2 text-xs"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentUser = null;
+let ALL_PACKAGES = [];
+
+function togglePasswordVisibility() {
+  const input = document.getElementById("loginPassword");
+  const openIcon = document.getElementById("eyeIconOpen");
+  const closedIcon = document.getElementById("eyeIconClosed");
+  if (input.type === "password") {
+    input.type = "text";
+    openIcon.classList.add("hidden");
+    closedIcon.classList.remove("hidden");
+  } else {
+    input.type = "password";
+    openIcon.classList.remove("hidden");
+    closedIcon.classList.add("hidden");
+  }
+}
+
+// ============= 登录 =============
+async function handleLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById("loginEmail").value.trim();
+  const password = document.getElementById("loginPassword").value.trim();
+  const btn = document.getElementById("loginBtn");
+  const errBox = document.getElementById("loginError");
+  btn.disabled = true; btn.textContent = "验证中...";
+  errBox.classList.add("hidden");
+
+  try {
+    const url = `${CONFIG.GAS_API_URL}?action=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`;
+    const resp = await fetch(url);
+    const json = await resp.json();
+    if (json.success) {
+      currentUser = json.user;
+      await initPortalView();
+    } else {
+      errBox.textContent = json.message || "账号或密码错误";
+      errBox.classList.remove("hidden");
+    }
+  } catch (err) {
+    errBox.textContent = "网络错误,请检查 GAS_API_URL 配置或网络连接: " + err.message;
+    errBox.classList.remove("hidden");
+  } finally {
+    btn.disabled = false; btn.innerHTML = "<span>登 录</span>";
+  }
+}
+
+function handleLogout() {
+  currentUser = null;
+  document.getElementById("mainPortal").classList.add("hidden");
+  document.getElementById("loginModal").classList.remove("hidden");
+  document.getElementById("loginForm").reset();
+}
+
+async function initPortalView() {
+  document.getElementById("loginModal").classList.add("hidden");
+  document.getElementById("mainPortal").classList.remove("hidden");
+  document.getElementById("dispEmail").textContent = currentUser.email;
+  document.getElementById("dispCustName").textContent = currentUser.customerName;
+  document.getElementById("dispBalance").textContent = CONFIG.CURRENCY_SYMBOL + Number(currentUser.balance).toFixed(2);
+
+  await loadPackages();
+  switchTab('order');
+}
+
+// ============= Tab 切换 =============
+function switchTab(tab) {
+  const isOrder = tab === 'order';
+  document.getElementById("tabOrder").classList.toggle("hidden", !isOrder);
+  document.getElementById("tabHistory").classList.toggle("hidden", isOrder);
+  document.getElementById("tabBtnOrder").className = "flex-1 py-3 " + (isOrder ? "tab-active" : "tab-inactive");
+  document.getElementById("tabBtnHistory").className = "flex-1 py-3 " + (!isOrder ? "tab-active" : "tab-inactive");
+  if (!isOrder) loadHistory();
+}
+
+// ============= SN 输入校验(20位) =============
+function handleSnInput(input) {
+  input.value = input.value.replace(/\D/g, '').slice(0, 20);
+  document.getElementById("snCount").textContent = input.value.length;
+  validateSnState();
+}
+
+function validateSnState() {
+  const sn = document.getElementById("simSnInput").value;
+  const feedback = document.getElementById("snFeedback");
+  const icon = document.getElementById("snStatusIcon");
+  const input = document.getElementById("simSnInput");
+
+  if (!sn) { feedback.textContent = ""; icon.textContent = ""; return false; }
+
+  if (/^[0-9]{20}$/.test(sn)) {
+    feedback.textContent = "✓ 20 位卡号格式正确";
+    feedback.className = "text-xs mt-1.5 font-medium text-emerald-600";
+    icon.textContent = "✅";
+    input.className = "w-full px-4 py-3 border border-emerald-400 bg-emerald-50/20 rounded-xl mono text-sm focus:outline-none";
+    return true;
+  } else {
+    feedback.textContent = `✕ 当前输入 ${sn.length} 位,必须为恰好 20 位阿拉伯数字`;
+    feedback.className = "text-xs mt-1.5 font-medium text-rose-600";
+    icon.textContent = "❌";
+    input.className = "w-full px-4 py-3 border border-rose-400 bg-rose-50/20 rounded-xl mono text-sm focus:outline-none";
+    return false;
+  }
+}
+
+// ============= 拍照 OCR 识别 SN =============
+async function handleOcrScan(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById("ocrStatus");
+  statusEl.textContent = "识别中,请稍候...(几秒到几十秒不等)";
+
+  try {
+    const result = await Tesseract.recognize(file, 'eng', {
+      logger: () => {} // 静默,避免控制台刷屏
+    });
+    const rawText = result.data.text || "";
+    const digitsOnly = rawText.replace(/\D/g, '');
+
+    // 优先寻找连续20位数字
+    const match20 = digitsOnly.match(/\d{20}/);
+    if (match20) {
+      document.getElementById("simSnInput").value = match20[0];
+      handleSnInput(document.getElementById("simSnInput"));
+      statusEl.textContent = "✅ 识别成功,请核对后再提交";
+      statusEl.className = "text-xs text-emerald-600";
+    } else if (digitsOnly.length >= 15) {
+      // 识别到数字但不足20位,填入供手动补全/核对
+      document.getElementById("simSnInput").value = digitsOnly.slice(0, 20);
+      handleSnInput(document.getElementById("simSnInput"));
+      statusEl.textContent = "⚠️ 未能精确识别20位,已填入可能结果,请手动核对修正";
+      statusEl.className = "text-xs text-amber-600";
+    } else {
+      statusEl.textContent = "❌ 未能识别到有效数字,请重新拍照(建议正面、光线充足、卡面平整)或手动输入";
+      statusEl.className = "text-xs text-rose-600";
+    }
+  } catch (err) {
+    statusEl.textContent = "识别出错: " + err.message + "，请手动输入";
+    statusEl.className = "text-xs text-rose-600";
+  }
+}
+
+// ============= 套餐加载与搜索 =============
+async function loadPackages() {
+  const resp = await fetch(`${CONFIG.GAS_API_URL}?action=packages`);
+  const json = await resp.json();
+  ALL_PACKAGES = json.success ? json.packages : [];
+  renderPackagesDropdown();
+}
+
+function renderPackagesDropdown(keyword = '') {
+  const select = document.getElementById("packageSelect");
+  const countFeedback = document.getElementById("searchCountFeedback");
+  const kw = keyword.trim().toLowerCase();
+
+  const filtered = ALL_PACKAGES.filter(pkg => {
+    if (!kw) return true;
+    const searchStr = `${pkg.name} ${pkg.quota} ${pkg.days}天 ${pkg.price}`.toLowerCase();
+    return searchStr.includes(kw);
+  });
+
+  select.innerHTML = '';
+  if (filtered.length === 0) {
+    const opt = document.createElement('option');
+    opt.textContent = "未找到匹配套餐"; opt.disabled = true;
+    select.appendChild(opt);
+    countFeedback.textContent = "找到 0 个套餐";
+  } else {
+    filtered.forEach(pkg => {
+      const opt = document.createElement('option');
+      opt.value = pkg.name; // 暂时以套餐名称作为唯一标识(未来加PackageID后可切换)
+      opt.setAttribute('data-price', pkg.price);
+      opt.textContent = `${pkg.name} (${CONFIG.CURRENCY_SYMBOL}${Number(pkg.price).toFixed(2)})`;
+      select.appendChild(opt);
+    });
+    countFeedback.textContent = `找到 ${filtered.length} 个符合条件的套餐`;
+  }
+  updatePriceCalculation();
+}
+
+function updatePriceCalculation() {
+  if (!currentUser) return;
+  const select = document.getElementById("packageSelect");
+  const opt = select.options[select.selectedIndex];
+  const price = opt ? parseFloat(opt.getAttribute('data-price')) || 0 : 0;
+  document.getElementById("calcPrice").textContent = CONFIG.CURRENCY_SYMBOL + price.toFixed(2);
+  const projected = currentUser.balance - price;
+  const projEl = document.getElementById("calcProjectedBalance");
+  projEl.textContent = CONFIG.CURRENCY_SYMBOL + projected.toFixed(2);
+  projEl.style.color = projected < 0 ? "#dc2626" : "#185FA5";
+}
+
+// ============= 下单提交 =============
+async function handleSubmitOrder() {
+  if (!validateSnState()) {
+    alert("SIM 卡 SN 码必须为严格的 20 位纯阿拉伯数字，请检查后再提交！");
+    return;
+  }
+  const select = document.getElementById("packageSelect");
+  const opt = select.options[select.selectedIndex];
+  if (!opt || !opt.value) { alert("请选择一个有效的充值套餐！"); return; }
+
+  const sn = document.getElementById("simSnInput").value.trim();
+  const packageName = opt.value;
+  const btn = document.getElementById("submitBtn");
+  btn.disabled = true; btn.innerHTML = "提交中...";
+
+  try {
+    const resp = await fetch(CONFIG.GAS_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ action: "order", email: currentUser.email, simSN: sn, packageName: packageName })
+    });
+    const res = await resp.json();
+    if (res.success) {
+      currentUser.balance = res.newBalance;
+      document.getElementById("dispBalance").textContent = CONFIG.CURRENCY_SYMBOL + Number(currentUser.balance).toFixed(2);
+      updatePriceCalculation();
+      alert(`🎉 下单成功！\n订单号: ${res.orderNo}\n最新余额: ${CONFIG.CURRENCY_SYMBOL}${Number(currentUser.balance).toFixed(2)}`);
+      document.getElementById("simSnInput").value = "";
+      handleSnInput(document.getElementById("simSnInput"));
+    } else {
+      alert("下单失败: " + res.message);
+    }
+  } catch (err) {
+    alert("网络错误: " + err.message);
+  } finally {
+    btn.disabled = false; btn.innerHTML = "<span>确认提交下单</span>";
+  }
+}
+
+// ============= 历史记录 =============
+async function loadHistory() {
+  const orderListEl = document.getElementById("orderHistoryList");
+  const rechargeListEl = document.getElementById("rechargeHistoryList");
+  orderListEl.innerHTML = "加载中...";
+  rechargeListEl.innerHTML = "加载中...";
+
+  try {
+    const resp = await fetch(`${CONFIG.GAS_API_URL}?action=history&email=${encodeURIComponent(currentUser.email)}`);
+    const json = await resp.json();
+    if (!json.success) { orderListEl.textContent = "加载失败"; return; }
+
+    orderListEl.innerHTML = json.orders.length ? json.orders.map(o => `
+      <div class="border border-slate-200 rounded-lg p-2.5 flex justify-between items-center">
+        <div>
+          <div class="font-semibold text-slate-700 flex items-center gap-1.5">
+            ${o.packageName}
+            ${o.fulfilled
+              ? '<span class="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">已充值</span>'
+              : '<span class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold">Pending 处理中</span>'}
+          </div>
+          <div class="text-slate-400 mono">SN: ${o.simSN}</div>
+          <div class="text-slate-400">${new Date(o.timestamp).toLocaleString('zh-CN')}</div>
+        </div>
+        <div class="text-right font-bold text-rose-600 mono">-${CONFIG.CURRENCY_SYMBOL}${Number(o.price).toFixed(2)}</div>
+      </div>
+    `).join('') : `<p class="text-slate-400">近3个月暂无订单记录</p>`;
+
+    rechargeListEl.innerHTML = json.recharges.length ? json.recharges.map(r => `
+      <div class="border border-slate-200 rounded-lg p-2.5 flex justify-between items-center">
+        <div>
+          <div class="text-slate-500">${r.note || '充值'}</div>
+          <div class="text-slate-400">${new Date(r.timestamp).toLocaleString('zh-CN')}</div>
+        </div>
+        <div class="text-right font-bold text-emerald-600 mono">+${CONFIG.CURRENCY_SYMBOL}${Number(r.amount).toFixed(2)}</div>
+      </div>
+    `).join('') : `<p class="text-slate-400">近3个月暂无充值记录</p>`;
+  } catch (err) {
+    orderListEl.textContent = "加载出错: " + err.message;
+  }
+}
+</script>
+</body>
+</html>
