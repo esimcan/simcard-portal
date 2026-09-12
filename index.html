@@ -103,6 +103,7 @@
   <div class="flex border-b border-slate-200 text-sm">
     <button onclick="switchTab('order')" id="tabBtnOrder" class="flex-1 py-3 tab-active" data-i18n="tabOrder">New Order</button>
     <button onclick="switchTab('history')" id="tabBtnHistory" class="flex-1 py-3 tab-inactive" data-i18n="tabHistory">History (Last 3 Months)</button>
+    <button onclick="switchTab('apn')" id="tabBtnApn" class="flex-1 py-3 tab-inactive" data-i18n="tabApn">APN</button>
   </div>
 
   <!-- ============ Tab 1: New Order ============ -->
@@ -187,6 +188,12 @@
       <div id="rechargeHistoryList" class="space-y-2 text-xs"></div>
     </div>
   </div>
+
+  <!-- ============ Tab 3: APN Lookup (Static List) ============ -->
+  <div id="tabApn" class="hidden p-6 space-y-3">
+    <p class="text-xs text-slate-400 mb-2" data-i18n="apnPageIntro">APN settings by product series</p>
+    <div id="apnListContainer" class="space-y-2 text-sm"></div>
+  </div>
 </div>
 
 <!-- ================= I18N Scripts ================= -->
@@ -205,6 +212,9 @@ const I18N = {
     logoutBtn: "Log Out",
     tabOrder: "New Order",
     tabHistory: "History (Last 3 Months)",
+    tabApn: "APN",
+    apnPageIntro: "APN settings by product series",
+    apnEmptyState: "No APN data available yet.",
     simSnLabel: "SIM Card SN",
     digits: "digits",
     simSnPlaceholder: "Enter 20-digit numeric SN or scan card",
@@ -256,6 +266,9 @@ const I18N = {
     logoutBtn: "Déconnexion",
     tabOrder: "Recharger",
     tabHistory: "Historique (3 derniers mois)",
+    tabApn: "APN",
+    apnPageIntro: "Paramètres APN par série de produits",
+    apnEmptyState: "Aucune donnée APN disponible pour le moment.",
     simSnLabel: "N° SN de Carte SIM",
     digits: "chiffres",
     simSnPlaceholder: "Entrez 20 chiffres ou scannez la carte",
@@ -307,6 +320,9 @@ const I18N = {
     logoutBtn: "Cerrar Sesión",
     tabOrder: "Recargar",
     tabHistory: "Historial (Últimos 3 meses)",
+    tabApn: "APN",
+    apnPageIntro: "Configuración de APN por serie de producto",
+    apnEmptyState: "Aún no hay datos de APN disponibles.",
     simSnLabel: "SN de Tarjeta SIM",
     digits: "dígitos",
     simSnPlaceholder: "Ingrese 20 dígitos numéricos o escanee",
@@ -358,6 +374,9 @@ const I18N = {
     logoutBtn: "退出登录",
     tabOrder: "下单充值",
     tabHistory: "历史记录 (近3个月)",
+    tabApn: "APN查询",
+    apnPageIntro: "按产品系列查询APN设置",
+    apnEmptyState: "暂无APN数据。",
     simSnLabel: "SIM 卡 SN 码",
     digits: "位数字",
     simSnPlaceholder: "请输入 20 位纯阿拉伯数字,或拍照自动识别",
@@ -446,8 +465,8 @@ function changeLanguage(lang) {
   validateSnState();
   renderPackagesDropdown(document.getElementById("packageSearchInput").value);
   if (currentUser) {
-    const isOrder = !document.getElementById("tabOrder").classList.contains("hidden");
-    if (!isOrder) loadHistory();
+    if (!document.getElementById("tabHistory").classList.contains("hidden")) loadHistory();
+    if (!document.getElementById("tabApn").classList.contains("hidden")) renderApnList();
   }
 }
 
@@ -547,12 +566,14 @@ async function initPortalView() {
 }
 
 function switchTab(tab) {
-  const isOrder = tab === 'order';
-  document.getElementById("tabOrder").classList.toggle("hidden", !isOrder);
-  document.getElementById("tabHistory").classList.toggle("hidden", isOrder);
-  document.getElementById("tabBtnOrder").className = "flex-1 py-3 " + (isOrder ? "tab-active" : "tab-inactive");
-  document.getElementById("tabBtnHistory").className = "flex-1 py-3 " + (!isOrder ? "tab-active" : "tab-inactive");
-  if (!isOrder) loadHistory();
+  document.getElementById("tabOrder").classList.toggle("hidden", tab !== 'order');
+  document.getElementById("tabHistory").classList.toggle("hidden", tab !== 'history');
+  document.getElementById("tabApn").classList.toggle("hidden", tab !== 'apn');
+  document.getElementById("tabBtnOrder").className = "flex-1 py-3 " + (tab === 'order' ? "tab-active" : "tab-inactive");
+  document.getElementById("tabBtnHistory").className = "flex-1 py-3 " + (tab === 'history' ? "tab-active" : "tab-inactive");
+  document.getElementById("tabBtnApn").className = "flex-1 py-3 " + (tab === 'apn' ? "tab-active" : "tab-inactive");
+  if (tab === 'history') loadHistory();
+  if (tab === 'apn') loadApnList();
 }
 
 // ============= 20-Digit Numeric SN Validation =============
@@ -730,6 +751,46 @@ async function handleSubmitOrder() {
 }
 
 // ============= Order & Recharge History =============
+// ============= APN Static List =============
+let ALL_APN = []; // 缓存一份,语言切换时直接重新渲染,不用重复请求
+let apnLoaded = false;
+
+async function loadApnList() {
+  const container = document.getElementById("apnListContainer");
+  if (apnLoaded) { renderApnList(); return; } // 已经拉取过,直接用缓存重渲染
+  container.innerHTML = `<span class="text-slate-400">${t("loadingText")}</span>`;
+  try {
+    const resp = await fetch(`${CONFIG.GAS_API_URL}?action=apn`);
+    const json = await resp.json();
+    if (!json.success) {
+      container.innerHTML = `${mapBackendMessage(json.message) || t("loadFailedText")} <button onclick="apnLoaded=false;loadApnList()" class="underline text-blue-600 ml-1">${t("retryText") || "Retry"}</button>`;
+      return;
+    }
+    ALL_APN = json.apnList;
+    apnLoaded = true;
+    renderApnList();
+  } catch (err) {
+    container.innerHTML = `${t("networkErrorPrefix")}${err.message} <button onclick="apnLoaded=false;loadApnList()" class="underline text-blue-600 ml-1">${t("retryText") || "Retry"}</button>`;
+  }
+}
+
+function renderApnList() {
+  const container = document.getElementById("apnListContainer");
+  if (!ALL_APN.length) {
+    container.innerHTML = `<p class="text-slate-400 text-xs">${t("apnEmptyState")}</p>`;
+    return;
+  }
+  container.innerHTML = ALL_APN.map(item => {
+    const displayName = (item.i18nNames && item.i18nNames[currentLang]) || item.i18nNames.en;
+    return `
+      <div class="border border-slate-200 rounded-lg p-3 flex justify-between items-center">
+        <span class="font-medium text-slate-700">${displayName}</span>
+        <span class="font-bold text-slate-800 mono">${item.apn}</span>
+      </div>
+    `;
+  }).join('');
+}
+
 let isLoadingHistory = false; // 防止上一次请求还没返回,又被重复触发,堆积多个并发请求
 
 async function loadHistory() {
