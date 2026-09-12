@@ -34,9 +34,9 @@
     </svg>
     <select id="languageSelect" onchange="changeLanguage(this.value)" class="bg-transparent focus:outline-none cursor-pointer pr-1">
       <option value="en" selected>English</option>
-      <option value="zh">中文 (简体)</option>
       <option value="fr">Français</option>
       <option value="es">Español</option>
+      <option value="zh">中文 (简体)</option>
     </select>
   </div>
 </div>
@@ -240,7 +240,8 @@ const I18N = {
     networkErrorPrefix: "Network Error: ",
     loadFailedText: "Failed to load, please refresh and try again",
     errorPrefix: "Error: ",
-    ocrErrorPrefix: "OCR Error: "
+    ocrErrorPrefix: "OCR Error: ",
+    retryText: "Retry"
   },
   fr: {
     loginTitle: "Connexion Client",
@@ -290,7 +291,8 @@ const I18N = {
     networkErrorPrefix: "Erreur réseau : ",
     loadFailedText: "Échec du chargement, veuillez actualiser et réessayer",
     errorPrefix: "Erreur : ",
-    ocrErrorPrefix: "Erreur OCR : "
+    ocrErrorPrefix: "Erreur OCR : ",
+    retryText: "Réessayer"
   },
   es: {
     loginTitle: "Inicio de Sesión",
@@ -340,7 +342,8 @@ const I18N = {
     networkErrorPrefix: "Error de red: ",
     loadFailedText: "Error al cargar, actualice e intente de nuevo",
     errorPrefix: "Error: ",
-    ocrErrorPrefix: "Error de OCR: "
+    ocrErrorPrefix: "Error de OCR: ",
+    retryText: "Reintentar"
   },
   zh: {
     loginTitle: "客户登录",
@@ -390,7 +393,8 @@ const I18N = {
     networkErrorPrefix: "网络错误: ",
     loadFailedText: "加载失败,请刷新重试",
     errorPrefix: "错误: ",
-    ocrErrorPrefix: "识别出错: "
+    ocrErrorPrefix: "识别出错: ",
+    retryText: "重试"
   }
 };
 
@@ -726,7 +730,12 @@ async function handleSubmitOrder() {
 }
 
 // ============= Order & Recharge History =============
+let isLoadingHistory = false; // 防止上一次请求还没返回,又被重复触发,堆积多个并发请求
+
 async function loadHistory() {
+  if (isLoadingHistory) return; // 正在加载中,忽略这次重复触发
+  isLoadingHistory = true;
+
   const orderListEl = document.getElementById("orderHistoryList");
   const rechargeListEl = document.getElementById("rechargeHistoryList");
   orderListEl.innerHTML = `<span class="text-slate-400">${t("loadingText")}</span>`;
@@ -736,7 +745,8 @@ async function loadHistory() {
     const resp = await fetch(`${CONFIG.GAS_API_URL}?action=history&email=${encodeURIComponent(currentUser.email)}`);
     const json = await resp.json();
     if (!json.success) {
-      orderListEl.textContent = mapBackendMessage(json.message) || t("loadFailedText");
+      orderListEl.innerHTML = `${mapBackendMessage(json.message) || t("loadFailedText")} <button onclick="loadHistory()" class="underline text-blue-600 ml-1">${t("retryText") || "Retry"}</button>`;
+      isLoadingHistory = false;
       return;
     }
 
@@ -769,7 +779,9 @@ async function loadHistory() {
       </div>
     `).join('') : `<p class="text-slate-400">${t("emptyHistoryRecharge")}</p>`;
   } catch (err) {
-    orderListEl.textContent = t("networkErrorPrefix") + err.message;
+    orderListEl.innerHTML = `${t("networkErrorPrefix")}${err.message} <button onclick="loadHistory()" class="underline text-blue-600 ml-1">${t("retryText") || "Retry"}</button>`;
+  } finally {
+    isLoadingHistory = false;
   }
 }
 
