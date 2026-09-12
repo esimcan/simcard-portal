@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SIM 卡自助充值 Portal - AG Digital Services</title>
+<title>SIM Portal - Multi-Language Self-Recharge</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
@@ -12,10 +12,10 @@
   .tab-inactive { border-bottom: 3px solid transparent; color: #94a3b8; }
 </style>
 </head>
-<body class="bg-slate-100 min-h-screen flex items-start justify-center p-4">
+<body class="bg-slate-100 min-h-screen flex flex-col items-center justify-start p-4">
 
 <!-- ========================================================
-  【配置区】部署好 Google Apps Script 后,把下面这行网址替换掉
+  【Config Area】Replace with your deployed Google Apps Script URL
 ========================================================= -->
 <script>
   const CONFIG = {
@@ -24,22 +24,39 @@
   };
 </script>
 
-<!-- ================= 1. 登录窗口 ================= -->
-<div id="loginModal" class="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden mt-10">
+<!-- ================= Header: Language Selector ================= -->
+<div class="w-full max-w-lg flex justify-end items-center mb-3">
+  <div class="inline-flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm text-xs font-medium text-slate-700">
+    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-500">
+      <circle cx="12" cy="12" r="10"></circle>
+      <line x1="2" y1="12" x2="22" y2="12"></line>
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+    </svg>
+    <select id="languageSelect" onchange="changeLanguage(this.value)" class="bg-transparent focus:outline-none cursor-pointer pr-1">
+      <option value="en" selected>English</option>
+      <option value="zh">中文 (简体)</option>
+      <option value="fr">Français</option>
+      <option value="es">Español</option>
+    </select>
+  </div>
+</div>
+
+<!-- ================= 1. Login Modal ================= -->
+<div id="loginModal" class="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden mt-4">
   <div class="p-6 text-white text-center" style="background:#2A4699;">
-    <h2 class="text-xl font-bold">客户登录</h2>
-    <p class="text-blue-100 text-xs mt-1">请输入您的邮箱与密码</p>
+    <h2 class="text-xl font-bold" data-i18n="loginTitle">Client Login</h2>
+    <p class="text-blue-100 text-xs mt-1" data-i18n="loginSubtitle">Please enter your email and password</p>
   </div>
   <form id="loginForm" onsubmit="handleLogin(event)" class="p-6 space-y-4">
     <div>
-      <label class="block text-xs font-bold text-slate-600 uppercase mb-1">邮箱</label>
+      <label class="block text-xs font-bold text-slate-600 uppercase mb-1" data-i18n="emailLabel">Email Address</label>
       <input type="email" id="loginEmail" required placeholder="you@example.com"
         class="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm" />
     </div>
     <div>
-      <label class="block text-xs font-bold text-slate-600 uppercase mb-1">密码</label>
+      <label class="block text-xs font-bold text-slate-600 uppercase mb-1" data-i18n="passwordLabel">Password</label>
       <div class="relative">
-        <input type="password" id="loginPassword" required placeholder="请输入密码"
+        <input type="password" id="loginPassword" required placeholder="••••••••"
           class="w-full px-4 py-2.5 pr-11 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm" />
         <button type="button" onclick="togglePasswordVisibility()" id="togglePwBtn"
           class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 select-none">
@@ -58,71 +75,76 @@
     <button type="submit" id="loginBtn"
       class="w-full text-white py-3 rounded-xl font-bold text-sm shadow-md transition-all flex justify-center items-center"
       style="background:#2A4699;">
-      <span>登 录</span>
+      <span data-i18n="loginBtn">Sign In</span>
     </button>
   </form>
 </div>
 
-<!-- ================= 2. 主界面 ================= -->
-<div id="mainPortal" class="hidden w-full max-w-lg bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden mt-10">
+<!-- ================= 2. Main Portal Interface ================= -->
+<div id="mainPortal" class="hidden w-full max-w-lg bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden mt-4">
 
-  <!-- 顶部状态看板 -->
+  <!-- Top Status Banner -->
   <div class="p-6 text-white" style="background:#2A4699;">
     <div class="flex justify-between items-start">
       <div>
-        <span class="text-[10px] px-2 py-0.5 rounded font-semibold tracking-wide" style="background:#185FA5;">自助充值</span>
+        <span class="text-[10px] px-2 py-0.5 rounded font-semibold tracking-wide" style="background:#185FA5;" data-i18n="badgeSelfRecharge">Self-Service</span>
         <h1 class="text-xl font-bold mt-1" id="dispCustName">--</h1>
-        <p class="text-blue-200 text-xs mt-0.5">邮箱: <span class="mono" id="dispEmail">--</span></p>
+        <p class="text-blue-200 text-xs mt-0.5"><span data-i18n="emailPrefix">Email</span>: <span class="mono" id="dispEmail">--</span></p>
       </div>
       <div class="text-right">
-        <span class="text-xs text-blue-200 block">当前账户余额</span>
+        <span class="text-xs text-blue-200 block" data-i18n="currentBalanceLabel">Account Balance</span>
         <span class="text-2xl font-black mono" style="color:#F5820B;" id="dispBalance">$0.00</span>
       </div>
     </div>
-    <button onclick="handleLogout()" class="text-[11px] text-blue-200 underline mt-3">退出登录</button>
+    <button onclick="handleLogout()" class="text-[11px] text-blue-200 underline mt-3" data-i18n="logoutBtn">Log Out</button>
   </div>
 
-  <!-- Tab 切换 -->
+  <!-- Tab Switcher -->
   <div class="flex border-b border-slate-200 text-sm">
-    <button onclick="switchTab('order')" id="tabBtnOrder" class="flex-1 py-3 tab-active">下单充值</button>
-    <button onclick="switchTab('history')" id="tabBtnHistory" class="flex-1 py-3 tab-inactive">历史记录 (近3个月)</button>
+    <button onclick="switchTab('order')" id="tabBtnOrder" class="flex-1 py-3 tab-active" data-i18n="tabOrder">New Order</button>
+    <button onclick="switchTab('history')" id="tabBtnHistory" class="flex-1 py-3 tab-inactive" data-i18n="tabHistory">History (Last 3 Months)</button>
   </div>
 
-  <!-- ============ Tab 1: 下单 ============ -->
+  <!-- ============ Tab 1: New Order ============ -->
   <div id="tabOrder" class="p-6 space-y-5">
 
-    <!-- SN 输入 + 拍照识别 -->
+    <!-- SIM SN Input + Camera OCR -->
     <div>
       <div class="flex justify-between items-center mb-1">
-        <label class="block text-sm font-bold text-slate-700">SIM 卡 SN 码 <span class="text-red-500">*</span></label>
-        <span class="text-xs font-mono text-slate-400"><span id="snCount">0</span> / 20 位数字</span>
+        <label class="block text-sm font-bold text-slate-700">
+          <span data-i18n="simSnLabel">SIM Card SN</span> <span class="text-red-500">*</span>
+        </label>
+        <span class="text-xs font-mono text-slate-400"><span id="snCount">0</span> / 20 <span data-i18n="digits">digits</span></span>
       </div>
       <div class="relative">
         <input type="text" id="simSnInput" maxlength="20" inputmode="numeric"
-          placeholder="请输入 20 位纯阿拉伯数字,或拍照自动识别"
+          data-i18n-placeholder="simSnPlaceholder"
+          placeholder="Enter 20-digit numeric SN or scan card"
           oninput="handleSnInput(this)"
           class="w-full px-4 py-3 border border-slate-200 rounded-xl mono text-sm focus:outline-none transition-all" />
         <span id="snStatusIcon" class="absolute right-3 top-3 text-base"></span>
       </div>
       <p id="snFeedback" class="text-xs mt-1.5 font-medium"></p>
 
-      <!-- 拍照/上传识别 -->
+      <!-- OCR Upload / Camera Scan -->
       <div class="mt-2 flex items-center gap-2">
         <label class="cursor-pointer text-xs font-semibold px-3 py-2 rounded-lg border border-dashed border-slate-300 text-slate-600 hover:bg-slate-50 flex items-center gap-1.5">
-          📷 拍照/上传SIM卡照片自动识别SN
+          📷 <span data-i18n="ocrBtnText">Take photo / Upload SIM to scan SN</span>
           <input type="file" accept="image/*" capture="environment" class="hidden" onchange="handleOcrScan(event)" />
         </label>
         <span id="ocrStatus" class="text-xs text-slate-400"></span>
       </div>
     </div>
 
-    <!-- 套餐搜索 + 下拉 -->
+    <!-- Package Search + Dropdown Selection -->
     <div>
       <div class="flex justify-between items-center mb-1">
-        <label class="block text-sm font-bold text-slate-700">选择充值套餐 <span class="text-red-500">*</span></label>
-        <span class="text-xs" style="color:#2A4699;">支持关键词搜索</span>
+        <label class="block text-sm font-bold text-slate-700">
+          <span data-i18n="selectPackageLabel">Select Plan</span> <span class="text-red-500">*</span>
+        </label>
+        <span class="text-xs" style="color:#2A4699;" data-i18n="keywordSearchTip">Keyword search supported</span>
       </div>
-      <input type="text" id="packageSearchInput" placeholder="🔍 快速搜索套餐..."
+      <input type="text" id="packageSearchInput" data-i18n-placeholder="searchPackagePlaceholder" placeholder="🔍 Search plans..."
         oninput="renderPackagesDropdown(this.value)"
         class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none focus:bg-white mb-2" />
       <select id="packageSelect" onchange="updatePriceCalculation()"
@@ -131,14 +153,14 @@
       <p id="searchCountFeedback" class="text-[11px] text-slate-400 mt-1"></p>
     </div>
 
-    <!-- 金额预估 -->
+    <!-- Pricing Estimation -->
     <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-sm">
       <div class="flex justify-between text-slate-600">
-        <span>本次套餐金额:</span>
+        <span data-i18n="packageAmountLabel">Plan Amount:</span>
         <span class="font-bold text-slate-900 mono" id="calcPrice">$0.00</span>
       </div>
       <div class="flex justify-between text-slate-600">
-        <span>下单后预计余额:</span>
+        <span data-i18n="projectedBalanceLabel">Estimated Balance:</span>
         <span class="font-bold mono" id="calcProjectedBalance" style="color:#185FA5;">$0.00</span>
       </div>
     </div>
@@ -146,30 +168,313 @@
     <button onclick="handleSubmitOrder()" id="submitBtn"
       class="w-full text-white py-3.5 rounded-xl font-bold text-base shadow-md transition-all flex justify-center items-center"
       style="background:#F5820B;">
-      <span>确认提交下单</span>
+      <span data-i18n="confirmOrderBtn">Confirm Order</span>
     </button>
 
-    <p class="text-center text-[11px] text-slate-400 leading-tight">
-      * 订单提交后将即时进入后台并自动扣减余额。由于运营商充值由管理员于每日凌晨统一处理，请您耐心等待。
+    <p class="text-center text-[11px] text-slate-400 leading-tight" data-i18n="orderDisclaimer">
+      * Orders deduct balance immediately upon submission. Operator recharges are batch-processed by admin daily at midnight.
     </p>
   </div>
 
-  <!-- ============ Tab 2: 历史记录 ============ -->
+  <!-- ============ Tab 2: History ============ -->
   <div id="tabHistory" class="hidden p-6 space-y-4">
     <div>
-      <h3 class="text-sm font-bold text-slate-700 mb-2">📦 订单记录</h3>
+      <h3 class="text-sm font-bold text-slate-700 mb-2" data-i18n="orderHistoryTitle">📦 Order Records</h3>
       <div id="orderHistoryList" class="space-y-2 text-xs"></div>
     </div>
     <div>
-      <h3 class="text-sm font-bold text-slate-700 mb-2 mt-4">💰 充值记录</h3>
+      <h3 class="text-sm font-bold text-slate-700 mb-2 mt-4" data-i18n="rechargeHistoryTitle">💰 Deposit Records</h3>
       <div id="rechargeHistoryList" class="space-y-2 text-xs"></div>
     </div>
   </div>
 </div>
 
+<!-- ================= I18N Scripts ================= -->
 <script>
+const I18N = {
+  en: {
+    loginTitle: "Client Login",
+    loginSubtitle: "Please enter your email and password",
+    emailLabel: "Email Address",
+    passwordLabel: "Password",
+    loginBtn: "Sign In",
+    loggingIn: "Authenticating...",
+    badgeSelfRecharge: "Self-Service",
+    emailPrefix: "Email",
+    currentBalanceLabel: "Account Balance",
+    logoutBtn: "Log Out",
+    tabOrder: "New Order",
+    tabHistory: "History (Last 3 Months)",
+    simSnLabel: "SIM Card SN",
+    digits: "digits",
+    simSnPlaceholder: "Enter 20-digit numeric SN or scan card",
+    ocrBtnText: "Take photo / Upload SIM to scan SN",
+    selectPackageLabel: "Select Plan",
+    keywordSearchTip: "Keyword search supported",
+    searchPackagePlaceholder: "🔍 Search plans...",
+    packageAmountLabel: "Plan Amount:",
+    projectedBalanceLabel: "Estimated Balance:",
+    confirmOrderBtn: "Confirm Order",
+    submitting: "Processing...",
+    orderDisclaimer: "* Orders deduct balance immediately upon submission. Operator recharges are batch-processed by admin daily at midnight.",
+    orderHistoryTitle: "📦 Order Records",
+    rechargeHistoryTitle: "💰 Deposit Records",
+    snValid: "✓ 20-digit SN format valid",
+    snInvalid: "✕ Current input: {len} digits. Exactly 20 digits required.",
+    noMatchPackage: "No matching plans found",
+    foundPackages: "Found {n} plan(s)",
+    emptyHistoryOrder: "No orders found in the last 3 months",
+    emptyHistoryRecharge: "No deposits found in the last 3 months",
+    ocrScanning: "Scanning image, please wait...",
+    ocrSuccess: "✅ Recognition successful. Please verify before submitting.",
+    ocrPartial: "⚠️ Partial match found. Please verify and correct.",
+    ocrFail: "❌ Could not recognize valid numbers. Please re-take photo or type manually.",
+    alertInvalidSn: "SIM SN must be strictly 20 numeric digits!",
+    alertSelectPackage: "Please select a valid recharge plan!",
+    alertOrderSuccess: "🎉 Order placed successfully!\nOrder No: {orderNo}\nNew Balance: {balance}",
+    statusFulfilled: "Fulfilled",
+    statusPending: "Pending",
+    rechargeDefaultNote: "Deposit",
+    loadingText: "Loading...",
+    authFailedDefault: "Authentication failed",
+    networkErrorPrefix: "Network Error: ",
+    loadFailedText: "Failed to load, please refresh and try again",
+    errorPrefix: "Error: ",
+    ocrErrorPrefix: "OCR Error: "
+  },
+  fr: {
+    loginTitle: "Connexion Client",
+    loginSubtitle: "Veuillez saisir votre e-mail et mot de passe",
+    emailLabel: "Adresse E-mail",
+    passwordLabel: "Mot de passe",
+    loginBtn: "Se Connecter",
+    loggingIn: "Vérification...",
+    badgeSelfRecharge: "Libre-Service",
+    emailPrefix: "E-mail",
+    currentBalanceLabel: "Solde Actuel",
+    logoutBtn: "Déconnexion",
+    tabOrder: "Recharger",
+    tabHistory: "Historique (3 derniers mois)",
+    simSnLabel: "N° SN de Carte SIM",
+    digits: "chiffres",
+    simSnPlaceholder: "Entrez 20 chiffres ou scannez la carte",
+    ocrBtnText: "Prendre photo / Importer pour scanner SN",
+    selectPackageLabel: "Choisir un Forfait",
+    keywordSearchTip: "Recherche par mots-clés",
+    searchPackagePlaceholder: "🔍 Rechercher un forfait...",
+    packageAmountLabel: "Montant du Forfait:",
+    projectedBalanceLabel: "Solde Estimé:",
+    confirmOrderBtn: "Confirmer la Commande",
+    submitting: "Traitement...",
+    orderDisclaimer: "* Les commandes sont déduites immédiatement du solde. Le rechargement opérateur est traité chaque nuit par l'administrateur.",
+    orderHistoryTitle: "📦 Historique des Commandes",
+    rechargeHistoryTitle: "💰 Historique des Dépôts",
+    snValid: "✓ Format de 20 chiffres valide",
+    snInvalid: "✕ Actuellement {len} chiffres. Exactement 20 chiffres requis.",
+    noMatchPackage: "Aucun forfait correspondant trouvé",
+    foundPackages: "{n} forfait(s) trouvé(s)",
+    emptyHistoryOrder: "Aucune commande au cours des 3 derniers mois",
+    emptyHistoryRecharge: "Aucun dépôt au cours des 3 derniers mois",
+    ocrScanning: "Reconnaissance en cours, veuillez patienter...",
+    ocrSuccess: "✅ Reconnaissance réussie. Veuillez vérifier.",
+    ocrPartial: "⚠️ 20 chiffres non exacts. Résultat partiel inséré.",
+    ocrFail: "❌ Échec de lecture. Veuillez reprendre la photo ou saisir manuellement.",
+    alertInvalidSn: "Le numéro SN doit comporter strictement 20 chiffres !",
+    alertSelectPackage: "Veuillez sélectionner un forfait valide !",
+    alertOrderSuccess: "🎉 Commande réussie !\nN° Commande: {orderNo}\nNouveau Solde: {balance}",
+    statusFulfilled: "Rechargé",
+    statusPending: "En attente",
+    rechargeDefaultNote: "Dépôt",
+    loadingText: "Chargement...",
+    authFailedDefault: "Échec de l'authentification",
+    networkErrorPrefix: "Erreur réseau : ",
+    loadFailedText: "Échec du chargement, veuillez actualiser et réessayer",
+    errorPrefix: "Erreur : ",
+    ocrErrorPrefix: "Erreur OCR : "
+  },
+  es: {
+    loginTitle: "Inicio de Sesión",
+    loginSubtitle: "Ingrese su correo electrónico y contraseña",
+    emailLabel: "Correo Electrónico",
+    passwordLabel: "Contraseña",
+    loginBtn: "Iniciar Sesión",
+    loggingIn: "Autenticando...",
+    badgeSelfRecharge: "Autoservicio",
+    emailPrefix: "Correo",
+    currentBalanceLabel: "Saldo Actual",
+    logoutBtn: "Cerrar Sesión",
+    tabOrder: "Recargar",
+    tabHistory: "Historial (Últimos 3 meses)",
+    simSnLabel: "SN de Tarjeta SIM",
+    digits: "dígitos",
+    simSnPlaceholder: "Ingrese 20 dígitos numéricos o escanee",
+    ocrBtnText: "Tomar foto / Subir tarjeta para escanear SN",
+    selectPackageLabel: "Seleccionar Paquete",
+    keywordSearchTip: "Búsqueda por palabra clave",
+    searchPackagePlaceholder: "🔍 Buscar paquetes...",
+    packageAmountLabel: "Precio del Paquete:",
+    projectedBalanceLabel: "Saldo Estimado:",
+    confirmOrderBtn: "Confirmar Pedido",
+    submitting: "Procesando...",
+    orderDisclaimer: "* El pedido deduce saldo de inmediato. Las recargas con operador son procesadas diariamente por el administrador a medianoche.",
+    orderHistoryTitle: "📦 Historial de Pedidos",
+    rechargeHistoryTitle: "💰 Historial de Recargas",
+    snValid: "✓ Formato de 20 dígitos correcto",
+    snInvalid: "✕ Longitud actual: {len} dígitos. Se requieren exactamente 20 dígitos.",
+    noMatchPackage: "No se encontraron paquetes",
+    foundPackages: "Se encontraron {n} paquete(s)",
+    emptyHistoryOrder: "Sin pedidos en los últimos 3 meses",
+    emptyHistoryRecharge: "Sin recargas en los últimos 3 meses",
+    ocrScanning: "Escaneando imagen, espere por favor...",
+    ocrSuccess: "✅ Reconocimiento exitoso. Por favor verifique.",
+    ocrPartial: "⚠️ Resultado aproximado insertado. Por favor verifique.",
+    ocrFail: "❌ No se reconocieron números válidos. Ingrese manualmente.",
+    alertInvalidSn: "¡El SN debe tener estrictamente 20 dígitos numéricos!",
+    alertSelectPackage: "¡Seleccione un paquete válido!",
+    alertOrderSuccess: "🎉 ¡Pedido realizado con éxito!\nN° Pedido: {orderNo}\nNuevo Saldo: {balance}",
+    statusFulfilled: "Recargado",
+    statusPending: "Pendiente",
+    rechargeDefaultNote: "Recarga",
+    loadingText: "Cargando...",
+    authFailedDefault: "Error de autenticación",
+    networkErrorPrefix: "Error de red: ",
+    loadFailedText: "Error al cargar, actualice e intente de nuevo",
+    errorPrefix: "Error: ",
+    ocrErrorPrefix: "Error de OCR: "
+  },
+  zh: {
+    loginTitle: "客户登录",
+    loginSubtitle: "请输入您的邮箱与密码",
+    emailLabel: "邮箱",
+    passwordLabel: "密码",
+    loginBtn: "登 录",
+    loggingIn: "验证中...",
+    badgeSelfRecharge: "自助充值",
+    emailPrefix: "邮箱",
+    currentBalanceLabel: "当前账户余额",
+    logoutBtn: "退出登录",
+    tabOrder: "下单充值",
+    tabHistory: "历史记录 (近3个月)",
+    simSnLabel: "SIM 卡 SN 码",
+    digits: "位数字",
+    simSnPlaceholder: "请输入 20 位纯阿拉伯数字,或拍照自动识别",
+    ocrBtnText: "拍照/上传SIM卡照片自动识别SN",
+    selectPackageLabel: "选择充值套餐",
+    keywordSearchTip: "支持关键词搜索",
+    searchPackagePlaceholder: "🔍 快速搜索套餐...",
+    packageAmountLabel: "本次套餐金额:",
+    projectedBalanceLabel: "下单后预计余额:",
+    confirmOrderBtn: "确认提交下单",
+    submitting: "提交中...",
+    orderDisclaimer: "* 订单提交后将即时进入后台并自动扣减余额。由于运营商充值由管理员于每日凌晨统一处理，请您耐心等待。",
+    orderHistoryTitle: "📦 订单记录",
+    rechargeHistoryTitle: "💰 充值记录",
+    snValid: "✓ 20 位卡号格式正确",
+    snInvalid: "✕ 当前输入 {len} 位,必须为恰好 20 位阿拉伯数字",
+    noMatchPackage: "未找到匹配套餐",
+    foundPackages: "找到 {n} 个符合条件的套餐",
+    emptyHistoryOrder: "近3个月暂无订单记录",
+    emptyHistoryRecharge: "近3个月暂无充值记录",
+    ocrScanning: "识别中,请稍候...(几秒到几十秒不等)",
+    ocrSuccess: "✅ 识别成功,请核对后再提交",
+    ocrPartial: "⚠️ 未能精确识别20位,已填入可能结果,请核对修正",
+    ocrFail: "❌ 未能识别到有效数字,请重新拍照或手动输入",
+    alertInvalidSn: "SIM 卡 SN 码必须为严格的 20 位纯阿拉伯数字，请检查后再提交！",
+    alertSelectPackage: "请选择一个有效的充值套餐！",
+    alertOrderSuccess: "🎉 下单成功！\n订单号: {orderNo}\n最新余额: {balance}",
+    statusFulfilled: "已充值",
+    statusPending: "Pending 处理中",
+    rechargeDefaultNote: "充值",
+    loadingText: "加载中...",
+    authFailedDefault: "登录失败",
+    networkErrorPrefix: "网络错误: ",
+    loadFailedText: "加载失败,请刷新重试",
+    errorPrefix: "错误: ",
+    ocrErrorPrefix: "识别出错: "
+  }
+};
+
+// ============= 后台中文报错信息 → 多语言映射表 =============
+// 后台 Code.gs 目前只返回中文报错(比如"密码错误"),这里在前端做一层翻译,
+// 让客户不管选哪个语言,报错文字都能看懂。
+// 【固定文案】精确匹配整句替换;
+// 【动态文案】(余额不足/套餐不存在这种带具体数字的)只在前面加一个方括号标签，
+// 后面数字/套餐名等具体内容保留原文,因为逐字翻译动态拼接内容风险比较高。
+const BACKEND_ERROR_MAP = {
+  "密码错误": { en: "Incorrect password", fr: "Mot de passe incorrect", es: "Contraseña incorrecta" },
+  "账号不存在": { en: "Account not found", fr: "Compte introuvable", es: "Cuenta no encontrada" },
+  "账号已被停用，请联系客服": { en: "This account has been suspended. Please contact support.", fr: "Ce compte a été suspendu. Veuillez contacter le support.", es: "Esta cuenta ha sido suspendida. Póngase en contacto con soporte." },
+  "账号已被停用": { en: "This account has been suspended", fr: "Ce compte a été suspendu", es: "Esta cuenta ha sido suspendida" },
+  "SIM卡SN必须为20位纯数字": { en: "SIM card SN must be exactly 20 digits", fr: "Le numéro SN de la carte SIM doit comporter exactement 20 chiffres", es: "El SN de la tarjeta SIM debe tener exactamente 20 dígitos" }
+};
+
+const BACKEND_ERROR_PREFIX_MAP = [
+  { prefix: "套餐不存在", labels: { en: "[Package unavailable] ", fr: "[Forfait indisponible] ", es: "[Paquete no disponible] " } }
+];
+
+// 把后台返回的中文报错信息,转换成当前界面语言更容易看懂的版本
+function mapBackendMessage(msg) {
+  if (!msg) return msg;
+  if (currentLang === 'zh') return msg; // 本来就是中文,不用处理
+  if (BACKEND_ERROR_MAP[msg] && BACKEND_ERROR_MAP[msg][currentLang]) {
+    return BACKEND_ERROR_MAP[msg][currentLang];
+  }
+  for (const entry of BACKEND_ERROR_PREFIX_MAP) {
+    if (msg.indexOf(entry.prefix) === 0) {
+      const label = entry.labels[currentLang] || '';
+      return label + msg; // 前面加语言标签,后面保留原始中文详情(含具体数字/套餐名)
+    }
+  }
+  return msg; // 没匹配到,原样返回中文(总比不显示任何信息好)
+}
+
+// 初始默认语言设为英文
+let currentLang = 'en';
 let currentUser = null;
 let ALL_PACKAGES = [];
+
+function changeLanguage(lang) {
+  if (!I18N[lang]) return;
+  currentLang = lang;
+  document.getElementById("languageSelect").value = lang;
+  document.documentElement.lang = lang === 'zh' ? 'zh-CN' : lang;
+  applyTranslations();
+  validateSnState();
+  renderPackagesDropdown(document.getElementById("packageSearchInput").value);
+  if (currentUser) {
+    const isOrder = !document.getElementById("tabOrder").classList.contains("hidden");
+    if (!isOrder) loadHistory();
+  }
+}
+
+function t(key, params = {}) {
+  let str = (I18N[currentLang] && I18N[currentLang][key]) || (I18N['en'][key]) || key;
+  for (const [k, v] of Object.entries(params)) {
+    str = str.replace(`{${k}}`, v);
+  }
+  return str;
+}
+
+function applyTranslations() {
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const key = el.getAttribute("data-i18n");
+    el.textContent = t(key);
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach(el => {
+    const key = el.getAttribute("data-i18n-placeholder");
+    el.setAttribute("placeholder", t(key));
+  });
+}
+
+// 历史记录里存的是下单时的中文套餐名,这里查一下当前产品库里对应的多语言名字
+// (如果套餐后来改名或下架了,查不到就原样显示中文,不会报错)
+function translatePackageName(zhName) {
+  const pkg = ALL_PACKAGES.find(p => p.i18nNames && p.i18nNames.zh === zhName);
+  if (pkg && pkg.i18nNames && pkg.i18nNames[currentLang]) {
+    return pkg.i18nNames[currentLang];
+  }
+  return zhName;
+}
 
 function togglePasswordVisibility() {
   const input = document.getElementById("loginPassword");
@@ -186,32 +491,36 @@ function togglePasswordVisibility() {
   }
 }
 
-// ============= 登录 =============
+// ============= Login Flow =============
 async function handleLogin(e) {
   e.preventDefault();
   const email = document.getElementById("loginEmail").value.trim();
   const password = document.getElementById("loginPassword").value.trim();
   const btn = document.getElementById("loginBtn");
   const errBox = document.getElementById("loginError");
-  btn.disabled = true; btn.textContent = "验证中...";
+
+  btn.disabled = true;
+  btn.textContent = t("loggingIn");
   errBox.classList.add("hidden");
 
   try {
     const url = `${CONFIG.GAS_API_URL}?action=login&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`;
     const resp = await fetch(url);
     const json = await resp.json();
+
     if (json.success) {
       currentUser = json.user;
       await initPortalView();
     } else {
-      errBox.textContent = json.message || "账号或密码错误";
+      errBox.textContent = mapBackendMessage(json.message) || t("authFailedDefault");
       errBox.classList.remove("hidden");
     }
   } catch (err) {
-    errBox.textContent = "网络错误,请检查 GAS_API_URL 配置或网络连接: " + err.message;
+    errBox.textContent = t("networkErrorPrefix") + err.message;
     errBox.classList.remove("hidden");
   } finally {
-    btn.disabled = false; btn.innerHTML = "<span>登 录</span>";
+    btn.disabled = false;
+    btn.innerHTML = `<span>${t("loginBtn")}</span>`;
   }
 }
 
@@ -233,7 +542,6 @@ async function initPortalView() {
   switchTab('order');
 }
 
-// ============= Tab 切换 =============
 function switchTab(tab) {
   const isOrder = tab === 'order';
   document.getElementById("tabOrder").classList.toggle("hidden", !isOrder);
@@ -243,7 +551,7 @@ function switchTab(tab) {
   if (!isOrder) loadHistory();
 }
 
-// ============= SN 输入校验(20位) =============
+// ============= 20-Digit Numeric SN Validation =============
 function handleSnInput(input) {
   input.value = input.value.replace(/\D/g, '').slice(0, 20);
   document.getElementById("snCount").textContent = input.value.length;
@@ -259,13 +567,13 @@ function validateSnState() {
   if (!sn) { feedback.textContent = ""; icon.textContent = ""; return false; }
 
   if (/^[0-9]{20}$/.test(sn)) {
-    feedback.textContent = "✓ 20 位卡号格式正确";
+    feedback.textContent = t("snValid");
     feedback.className = "text-xs mt-1.5 font-medium text-emerald-600";
     icon.textContent = "✅";
     input.className = "w-full px-4 py-3 border border-emerald-400 bg-emerald-50/20 rounded-xl mono text-sm focus:outline-none";
     return true;
   } else {
-    feedback.textContent = `✕ 当前输入 ${sn.length} 位,必须为恰好 20 位阿拉伯数字`;
+    feedback.textContent = t("snInvalid", { len: sn.length });
     feedback.className = "text-xs mt-1.5 font-medium text-rose-600";
     icon.textContent = "❌";
     input.className = "w-full px-4 py-3 border border-rose-400 bg-rose-50/20 rounded-xl mono text-sm focus:outline-none";
@@ -273,49 +581,50 @@ function validateSnState() {
   }
 }
 
-// ============= 拍照 OCR 识别 SN =============
+// ============= OCR Image Recognition =============
 async function handleOcrScan(event) {
   const file = event.target.files[0];
   if (!file) return;
   const statusEl = document.getElementById("ocrStatus");
-  statusEl.textContent = "识别中,请稍候...(几秒到几十秒不等)";
+  statusEl.textContent = t("ocrScanning");
+  statusEl.className = "text-xs text-slate-500";
 
   try {
-    const result = await Tesseract.recognize(file, 'eng', {
-      logger: () => {} // 静默,避免控制台刷屏
-    });
+    const result = await Tesseract.recognize(file, 'eng', { logger: () => {} });
     const rawText = result.data.text || "";
     const digitsOnly = rawText.replace(/\D/g, '');
 
-    // 优先寻找连续20位数字
     const match20 = digitsOnly.match(/\d{20}/);
     if (match20) {
       document.getElementById("simSnInput").value = match20[0];
       handleSnInput(document.getElementById("simSnInput"));
-      statusEl.textContent = "✅ 识别成功,请核对后再提交";
+      statusEl.textContent = t("ocrSuccess");
       statusEl.className = "text-xs text-emerald-600";
     } else if (digitsOnly.length >= 15) {
-      // 识别到数字但不足20位,填入供手动补全/核对
       document.getElementById("simSnInput").value = digitsOnly.slice(0, 20);
       handleSnInput(document.getElementById("simSnInput"));
-      statusEl.textContent = "⚠️ 未能精确识别20位,已填入可能结果,请手动核对修正";
+      statusEl.textContent = t("ocrPartial");
       statusEl.className = "text-xs text-amber-600";
     } else {
-      statusEl.textContent = "❌ 未能识别到有效数字,请重新拍照(建议正面、光线充足、卡面平整)或手动输入";
+      statusEl.textContent = t("ocrFail");
       statusEl.className = "text-xs text-rose-600";
     }
   } catch (err) {
-    statusEl.textContent = "识别出错: " + err.message + "，请手动输入";
+    statusEl.textContent = t("ocrErrorPrefix") + err.message;
     statusEl.className = "text-xs text-rose-600";
   }
 }
 
-// ============= 套餐加载与搜索 =============
+// ============= Packages Loader & Search Filter =============
 async function loadPackages() {
-  const resp = await fetch(`${CONFIG.GAS_API_URL}?action=packages`);
-  const json = await resp.json();
-  ALL_PACKAGES = json.success ? json.packages : [];
-  renderPackagesDropdown();
+  try {
+    const resp = await fetch(`${CONFIG.GAS_API_URL}?action=packages`);
+    const json = await resp.json();
+    ALL_PACKAGES = json.success ? json.packages : [];
+    renderPackagesDropdown();
+  } catch (err) {
+    console.error("Failed to load packages", err);
+  }
 }
 
 function renderPackagesDropdown(keyword = '') {
@@ -325,25 +634,29 @@ function renderPackagesDropdown(keyword = '') {
 
   const filtered = ALL_PACKAGES.filter(pkg => {
     if (!kw) return true;
-    const searchStr = `${pkg.name} ${pkg.quota} ${pkg.days}天 ${pkg.price}`.toLowerCase();
+    // 搜索时把中/英/法/西4个名字都拼进去搜,不管客户用哪种语言输入关键词都能搜到
+    const allNames = pkg.i18nNames ? Object.values(pkg.i18nNames).join(' ') : pkg.name;
+    const searchStr = `${allNames} ${pkg.quota} ${pkg.days} ${pkg.price}`.toLowerCase();
     return searchStr.includes(kw);
   });
 
   select.innerHTML = '';
   if (filtered.length === 0) {
     const opt = document.createElement('option');
-    opt.textContent = "未找到匹配套餐"; opt.disabled = true;
+    opt.textContent = t("noMatchPackage");
+    opt.disabled = true;
     select.appendChild(opt);
-    countFeedback.textContent = "找到 0 个套餐";
+    countFeedback.textContent = t("foundPackages", { n: 0 });
   } else {
     filtered.forEach(pkg => {
       const opt = document.createElement('option');
-      opt.value = pkg.name; // 暂时以套餐名称作为唯一标识(未来加PackageID后可切换)
+      opt.value = pkg.id; // 提交订单用package_id,不再依赖任何语言的名字拼写
       opt.setAttribute('data-price', pkg.price);
-      opt.textContent = `${pkg.name} (${CONFIG.CURRENCY_SYMBOL}${Number(pkg.price).toFixed(2)})`;
+      const displayName = (pkg.i18nNames && pkg.i18nNames[currentLang]) || pkg.name;
+      opt.textContent = `${displayName} (${CONFIG.CURRENCY_SYMBOL}${Number(pkg.price).toFixed(2)})`;
       select.appendChild(opt);
     });
-    countFeedback.textContent = `找到 ${filtered.length} 个符合条件的套餐`;
+    countFeedback.textContent = t("foundPackages", { n: filtered.length });
   }
   updatePriceCalculation();
 }
@@ -360,85 +673,110 @@ function updatePriceCalculation() {
   projEl.style.color = projected < 0 ? "#dc2626" : "#185FA5";
 }
 
-// ============= 下单提交 =============
+// ============= Order Submit Flow =============
 async function handleSubmitOrder() {
   if (!validateSnState()) {
-    alert("SIM 卡 SN 码必须为严格的 20 位纯阿拉伯数字，请检查后再提交！");
+    alert(t("alertInvalidSn"));
     return;
   }
   const select = document.getElementById("packageSelect");
   const opt = select.options[select.selectedIndex];
-  if (!opt || !opt.value) { alert("请选择一个有效的充值套餐！"); return; }
+  if (!opt || !opt.value) {
+    alert(t("alertSelectPackage"));
+    return;
+  }
 
   const sn = document.getElementById("simSnInput").value.trim();
-  const packageName = opt.value;
+  const packageId = opt.value;
   const btn = document.getElementById("submitBtn");
-  btn.disabled = true; btn.innerHTML = "提交中...";
+  btn.disabled = true;
+  btn.textContent = t("submitting");
 
   try {
     const resp = await fetch(CONFIG.GAS_API_URL, {
       method: "POST",
-      body: JSON.stringify({ action: "order", email: currentUser.email, simSN: sn, packageName: packageName })
+      body: JSON.stringify({
+        action: "order",
+        email: currentUser.email,
+        simSN: sn,
+        packageId: packageId
+      })
     });
     const res = await resp.json();
+
     if (res.success) {
       currentUser.balance = res.newBalance;
       document.getElementById("dispBalance").textContent = CONFIG.CURRENCY_SYMBOL + Number(currentUser.balance).toFixed(2);
       updatePriceCalculation();
-      alert(`🎉 下单成功！\n订单号: ${res.orderNo}\n最新余额: ${CONFIG.CURRENCY_SYMBOL}${Number(currentUser.balance).toFixed(2)}`);
+      alert(t("alertOrderSuccess", {
+        orderNo: res.orderNo,
+        balance: CONFIG.CURRENCY_SYMBOL + Number(currentUser.balance).toFixed(2)
+      }));
       document.getElementById("simSnInput").value = "";
       handleSnInput(document.getElementById("simSnInput"));
     } else {
-      alert("下单失败: " + res.message);
+      alert(t("errorPrefix") + mapBackendMessage(res.message));
     }
   } catch (err) {
-    alert("网络错误: " + err.message);
+    alert(t("networkErrorPrefix") + err.message);
   } finally {
-    btn.disabled = false; btn.innerHTML = "<span>确认提交下单</span>";
+    btn.disabled = false;
+    btn.innerHTML = `<span>${t("confirmOrderBtn")}</span>`;
   }
 }
 
-// ============= 历史记录 =============
+// ============= Order & Recharge History =============
 async function loadHistory() {
   const orderListEl = document.getElementById("orderHistoryList");
   const rechargeListEl = document.getElementById("rechargeHistoryList");
-  orderListEl.innerHTML = "加载中...";
-  rechargeListEl.innerHTML = "加载中...";
+  orderListEl.innerHTML = `<span class="text-slate-400">${t("loadingText")}</span>`;
+  rechargeListEl.innerHTML = `<span class="text-slate-400">${t("loadingText")}</span>`;
 
   try {
     const resp = await fetch(`${CONFIG.GAS_API_URL}?action=history&email=${encodeURIComponent(currentUser.email)}`);
     const json = await resp.json();
-    if (!json.success) { orderListEl.textContent = "加载失败"; return; }
+    if (!json.success) {
+      orderListEl.textContent = mapBackendMessage(json.message) || t("loadFailedText");
+      return;
+    }
+
+    const localeMap = { en: 'en-US', fr: 'fr-FR', es: 'es-ES', zh: 'zh-CN' };
+    const dateLocale = localeMap[currentLang] || 'en-US';
 
     orderListEl.innerHTML = json.orders.length ? json.orders.map(o => `
       <div class="border border-slate-200 rounded-lg p-2.5 flex justify-between items-center">
         <div>
           <div class="font-semibold text-slate-700 flex items-center gap-1.5">
-            ${o.packageName}
+            ${translatePackageName(o.packageName)}
             ${o.fulfilled
-              ? '<span class="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">已充值</span>'
-              : '<span class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold">Pending 处理中</span>'}
+              ? `<span class="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">${t("statusFulfilled")}</span>`
+              : `<span class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold">${t("statusPending")}</span>`}
           </div>
           <div class="text-slate-400 mono">SN: ${o.simSN}</div>
-          <div class="text-slate-400">${new Date(o.timestamp).toLocaleString('zh-CN')}</div>
+          <div class="text-slate-400">${new Date(o.timestamp).toLocaleString(dateLocale)}</div>
         </div>
         <div class="text-right font-bold text-rose-600 mono">-${CONFIG.CURRENCY_SYMBOL}${Number(o.price).toFixed(2)}</div>
       </div>
-    `).join('') : `<p class="text-slate-400">近3个月暂无订单记录</p>`;
+    `).join('') : `<p class="text-slate-400">${t("emptyHistoryOrder")}</p>`;
 
     rechargeListEl.innerHTML = json.recharges.length ? json.recharges.map(r => `
       <div class="border border-slate-200 rounded-lg p-2.5 flex justify-between items-center">
         <div>
-          <div class="text-slate-500">${r.note || '充值'}</div>
-          <div class="text-slate-400">${new Date(r.timestamp).toLocaleString('zh-CN')}</div>
+          <div class="text-slate-500">${r.note || t("rechargeDefaultNote")}</div>
+          <div class="text-slate-400">${new Date(r.timestamp).toLocaleString(dateLocale)}</div>
         </div>
         <div class="text-right font-bold text-emerald-600 mono">+${CONFIG.CURRENCY_SYMBOL}${Number(r.amount).toFixed(2)}</div>
       </div>
-    `).join('') : `<p class="text-slate-400">近3个月暂无充值记录</p>`;
+    `).join('') : `<p class="text-slate-400">${t("emptyHistoryRecharge")}</p>`;
   } catch (err) {
-    orderListEl.textContent = "加载出错: " + err.message;
+    orderListEl.textContent = t("networkErrorPrefix") + err.message;
   }
 }
+
+// 页面加载完成后应用默认语言（英文）
+document.addEventListener("DOMContentLoaded", () => {
+  changeLanguage('en');
+});
 </script>
 </body>
 </html>
