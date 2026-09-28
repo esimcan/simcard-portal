@@ -19,7 +19,7 @@
 ========================================================= -->
 <script>
   const CONFIG = {
-    GAS_API_URL: "https://script.google.com/macros/s/AKfycbwYWiUaYMozQyrjYsj1xJA2nR1KgzU86aM6eb2JQM8xm0z3zD5RRmyTkMqx4Hgr17wW6w/exec",
+    GAS_API_URL: "https://portal.api.esimcan.co/api", // 新后端(阿里云 Python)。如需回退到旧的 Google Apps Script,换回旧网址即可
     CURRENCY_SYMBOL: "$"
   };
 </script>
@@ -34,9 +34,9 @@
     </svg>
     <select id="languageSelect" onchange="changeLanguage(this.value)" class="bg-transparent focus:outline-none cursor-pointer pr-1">
       <option value="en" selected>English</option>
-      <option value="zh">中文 (简体)</option>
       <option value="fr">Français</option>
       <option value="es">Español</option>
+      <option value="zh">中文 (简体)</option>
     </select>
   </div>
 </div>
