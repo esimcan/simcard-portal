@@ -6,6 +6,7 @@
 <title>SIM Portal - Multi-Language Self-Recharge</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/iife/reader/index.js"></script>
 <style>
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
   .tab-active { border-bottom: 3px solid #2A4699; color: #2A4699; font-weight: 700; }
@@ -128,10 +129,14 @@
       <p id="snFeedback" class="text-xs mt-1.5 font-medium"></p>
 
       <!-- OCR Upload / Camera Scan -->
-      <div class="mt-2 flex items-center gap-2">
+      <div class="mt-2 flex flex-wrap items-center gap-2">
         <label class="cursor-pointer text-xs font-semibold px-3 py-2 rounded-lg border border-dashed border-slate-300 text-slate-600 hover:bg-slate-50 flex items-center gap-1.5">
-          📷 <span data-i18n="ocrBtnText">Take photo / Upload SIM to scan SN</span>
+          📷 <span data-i18n="ocrBtnCamera">Take photo</span>
           <input type="file" accept="image/*" capture="environment" class="hidden" onchange="handleOcrScan(event)" />
+        </label>
+        <label class="cursor-pointer text-xs font-semibold px-3 py-2 rounded-lg border border-dashed border-slate-300 text-slate-600 hover:bg-slate-50 flex items-center gap-1.5">
+          🖼️ <span data-i18n="ocrBtnGallery">Choose from gallery</span>
+          <input type="file" accept="image/*" class="hidden" onchange="handleOcrScan(event)" />
         </label>
         <span id="ocrStatus" class="text-xs text-slate-400"></span>
       </div>
@@ -219,6 +224,8 @@ const I18N = {
     digits: "digits",
     simSnPlaceholder: "Enter 20-digit numeric SN or scan card",
     ocrBtnText: "Take photo / Upload SIM to scan SN",
+    ocrBtnCamera: "Take photo",
+    ocrBtnGallery: "Choose from gallery",
     selectPackageLabel: "Select Plan",
     keywordSearchTip: "Keyword search supported",
     searchPackagePlaceholder: "🔍 Search plans...",
@@ -273,6 +280,8 @@ const I18N = {
     digits: "chiffres",
     simSnPlaceholder: "Entrez 20 chiffres ou scannez la carte",
     ocrBtnText: "Prendre photo / Importer pour scanner SN",
+    ocrBtnCamera: "Prendre une photo",
+    ocrBtnGallery: "Choisir dans la galerie",
     selectPackageLabel: "Choisir un Forfait",
     keywordSearchTip: "Recherche par mots-clés",
     searchPackagePlaceholder: "🔍 Rechercher un forfait...",
@@ -327,6 +336,8 @@ const I18N = {
     digits: "dígitos",
     simSnPlaceholder: "Ingrese 20 dígitos numéricos o escanee",
     ocrBtnText: "Tomar foto / Subir tarjeta para escanear SN",
+    ocrBtnCamera: "Tomar foto",
+    ocrBtnGallery: "Elegir de la galería",
     selectPackageLabel: "Seleccionar Paquete",
     keywordSearchTip: "Búsqueda por palabra clave",
     searchPackagePlaceholder: "🔍 Buscar paquetes...",
@@ -381,6 +392,8 @@ const I18N = {
     digits: "位数字",
     simSnPlaceholder: "请输入 20 位纯阿拉伯数字,或拍照自动识别",
     ocrBtnText: "拍照/上传SIM卡照片自动识别SN",
+    ocrBtnCamera: "拍照识别",
+    ocrBtnGallery: "从相册选择",
     selectPackageLabel: "选择充值套餐",
     keywordSearchTip: "支持关键词搜索",
     searchPackagePlaceholder: "🔍 快速搜索套餐...",
@@ -606,7 +619,97 @@ function validateSnState() {
   }
 }
 
-// ============= OCR Image Recognition =============
+// ============= SN Recognition: barcode/QR first, OCR as fallback =============
+// Card SN is printed as a Code128 barcode (and the QR holds the same 20 digits).
+// Barcode decoding is far faster and more accurate than OCR.
+const BARCODE_SCALES = [2000, 2400, 3600, 1600, 3000, 1200]; // long-side px; decoding is scale-sensitive, so try several
+
+// Warm up the barcode engine (~1MB wasm) in the background
+window.addEventListener('load', () => setTimeout(() => {
+  try { if (typeof ZXingWASM !== 'undefined') ZXingWASM.prepareZXingModule({ fireImmediately: true }); } catch (e) {}
+}, 500));
+
+function drawScaled(bmp, longSide) {
+  const s = longSide / Math.max(bmp.width, bmp.height);
+  const c = document.createElement('canvas');
+  c.width = Math.round(bmp.width * s);
+  c.height = Math.round(bmp.height * s);
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bmp, 0, 0, c.width, c.height);
+  return { canvas: c, ctx };
+}
+
+async function decodeSnFromBarcode(file) {
+  if (typeof ZXingWASM === 'undefined') return null;
+  const bmp = await createImageBitmap(file);
+  try {
+    for (const side of BARCODE_SCALES) {
+      const { canvas, ctx } = drawScaled(bmp, side);
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const results = await ZXingWASM.readBarcodes(imgData, {
+        tryHarder: true,
+        tryRotate: true,
+        formats: ['Code128', 'QRCode'],
+        maxNumberOfSymbols: 3
+      });
+      for (const r of results) {
+        const txt = (r.text || '').trim();
+        if (/^\d{20}$/.test(txt)) return txt;
+      }
+    }
+  } finally {
+    if (bmp.close) bmp.close();
+  }
+  return null;
+}
+
+// ---- OCR fallback (only loaded/used when no barcode could be read) ----
+let ocrWorkerPromise = null;
+function getOcrWorker() {
+  if (!ocrWorkerPromise) {
+    ocrWorkerPromise = (async () => {
+      const w = await Tesseract.createWorker('eng');
+      await w.setParameters({
+        tessedit_char_whitelist: '0123456789',
+        tessedit_pageseg_mode: '11'
+      });
+      return w;
+    })();
+  }
+  return ocrWorkerPromise;
+}
+
+async function prepareOcrImage(file, maxSide = 1600) {
+  const bmp = await createImageBitmap(file);
+  const s = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(bmp.width * s);
+  c.height = Math.round(bmp.height * s);
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(bmp, 0, 0, c.width, c.height);
+  if (bmp.close) bmp.close();
+  const img = ctx.getImageData(0, 0, c.width, c.height);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    let g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    g = Math.max(0, Math.min(255, (g - 128) * 1.4 + 128));
+    d[i] = d[i + 1] = d[i + 2] = g;
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+
+function fillSn(value, msgKey, cls) {
+  const input = document.getElementById("simSnInput");
+  const statusEl = document.getElementById("ocrStatus");
+  input.value = value;
+  handleSnInput(input);
+  statusEl.textContent = t(msgKey);
+  statusEl.className = cls;
+}
+
 async function handleOcrScan(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -615,21 +718,24 @@ async function handleOcrScan(event) {
   statusEl.className = "text-xs text-slate-500";
 
   try {
-    const result = await Tesseract.recognize(file, 'eng', { logger: () => {} });
-    const rawText = result.data.text || "";
-    const digitsOnly = rawText.replace(/\D/g, '');
+    // 1) barcode / QR
+    const sn = await decodeSnFromBarcode(file);
+    if (sn) {
+      fillSn(sn, "ocrSuccess", "text-xs text-emerald-600");
+      return;
+    }
+
+    // 2) fallback: OCR on the printed digits
+    const worker = await getOcrWorker();
+    const canvas = await prepareOcrImage(file);
+    const result = await worker.recognize(canvas);
+    const digitsOnly = (result.data.text || "").replace(/\D/g, '');
 
     const match20 = digitsOnly.match(/\d{20}/);
     if (match20) {
-      document.getElementById("simSnInput").value = match20[0];
-      handleSnInput(document.getElementById("simSnInput"));
-      statusEl.textContent = t("ocrSuccess");
-      statusEl.className = "text-xs text-emerald-600";
+      fillSn(match20[0], "ocrSuccess", "text-xs text-emerald-600");
     } else if (digitsOnly.length >= 15) {
-      document.getElementById("simSnInput").value = digitsOnly.slice(0, 20);
-      handleSnInput(document.getElementById("simSnInput"));
-      statusEl.textContent = t("ocrPartial");
-      statusEl.className = "text-xs text-amber-600";
+      fillSn(digitsOnly.slice(0, 20), "ocrPartial", "text-xs text-amber-600");
     } else {
       statusEl.textContent = t("ocrFail");
       statusEl.className = "text-xs text-rose-600";
@@ -637,6 +743,8 @@ async function handleOcrScan(event) {
   } catch (err) {
     statusEl.textContent = t("ocrErrorPrefix") + err.message;
     statusEl.className = "text-xs text-rose-600";
+  } finally {
+    event.target.value = '';   // allow re-selecting the same photo
   }
 }
 
